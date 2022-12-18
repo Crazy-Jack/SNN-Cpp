@@ -22,6 +22,12 @@ You should now have the most up-to-date installation of cmake. Check the version
 cmake --version
 ```
 
+After CMake is updated, build project with the library pointed as follows:
+```
+cmake -DCMAKE_PREFIX_PATH=/home/tianqinl/SNN-Cpp/cache_replacement/libtorch ..
+```
+See [`build_binary.sh`](cache_replacement/build_binary.sh) for how to compile with libtorch properly.
+
 # Build
 ```
 export CC=`which gcc`
