@@ -1,7 +1,7 @@
 # SNN-Cpp
 Spike Neural Network training Implemented directly using PyTorch Cpp Frontend (libtorch)
 
-# Install C++ Distributions of Pytorch
+# Install Pytorch C++ library -- libtorch
 [https://pytorch.org/cppdocs/installing.html#minimal-example](https://pytorch.org/cppdocs/installing.html#minimal-example)
 
 
