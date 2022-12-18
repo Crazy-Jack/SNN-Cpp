@@ -1,3 +1,5 @@
+This file serves as references for how to run Cache Replacement Championship.
+
 
 # Welcome to the 2nd Cache Replacement Championship!
 
