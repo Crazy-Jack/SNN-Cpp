@@ -1,2 +1,6 @@
 *.zip
 libtorch/
+trace/
+.vscode/
+build/
+.log/

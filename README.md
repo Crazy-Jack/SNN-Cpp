@@ -22,3 +22,19 @@ You should now have the most up-to-date installation of cmake. Check the version
 
 cmake --version
 ```
+
+# Build
+```
+export CC=`which gcc`
+export CXX=`which g++`
+
+rm -rf build
+mkdir build
+cd build 
+cmake -DCMAKE_PREFIX_PATH=/home/tianqinl/SNN-Cpp/example-app/libtorch ..
+cmake --build . --config Release
+cd ..
+```
+
+
+
