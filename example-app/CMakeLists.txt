@@ -4,9 +4,10 @@ project(example-app)
 find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
-add_executable(example-app example-app.cpp)
-target_link_libraries(example-app "${TORCH_LIBRARIES}")
+add_executable(example-app ${PROJECT_SOURCE_DIR}/ChampCache/example/cache_snn.cc)
+target_link_libraries(example-app "${TORCH_LIBRARIES}" ${PROJECT_SOURCE_DIR}/ChampCache/lib/config2.a)
 set_property(TARGET example-app PROPERTY CXX_STANDARD 14)
+set_property(TARGET example-app PROPERTY PROPERTY CXX_STANDARD_REQUIRED ON)
 
 # The following code block is suggested to be used on Windows.
 # According to https://github.com/pytorch/pytorch/issues/25457,
