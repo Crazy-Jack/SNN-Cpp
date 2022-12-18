@@ -33,62 +33,30 @@ constexpr double normalize (T value) {
     ;
 }
 
+
+
 struct Net : torch::nn::Module {
   Net() {
-    fc1 = register_module("fc1", torch::nn::Linear(256, 64));
-    fc2 = register_module("fc2", torch::nn::Linear(64, 32));
+    fc1 = register_module("fc1", torch::nn::Linear(256, 256));
+    fc2 = register_module("fc2", torch::nn::Linear(256, 256));
     fc3 = register_module("fc3", torch::nn::Linear(32, 2));
     torch::manual_seed(0);
     B = torch::rand({40, 256}) * 10; 
-    decay_multiplier = 0.9;
-    threshold=2.0;
-    penalty_threshold=2.5;
-    prev_inner1 = torch::zeros({1, 64});
-    prev_inner2 = torch::zeros({1, 32});
-    // torch::optim::Adam optim(
-    //     this->parameters(), torch::optim::AdamOptions(1e-1).beta1(0.5));
+    error = float 0;
+   
   }
 //   // noise for sensitive signals 
 //   torch::Tensor B = torch::rand({2, 256}); // input is 2 dim
+
   torch::Tensor forward(torch::Tensor x) {
 
-    torch::Tensor input_excitation, inner_excitation, outer_excitation;
-    torch::Tensor do_penalize_gate;
-    
-    input_excitation = torch::matmul(x, B);
-    input_excitation = torch::relu(fc1->forward(input_excitation));
-    inner_excitation = input_excitation + prev_inner1 * decay_multiplier;
-    outer_excitation = torch::relu(inner_excitation - threshold);
-    // binarization of the activation
-    do_penalize_gate = (outer_excitation > 0).to(torch::kLong);
-    inner_excitation = inner_excitation - do_penalize_gate * (penalty_threshold/threshold * inner_excitation);
-    prev_inner1 = inner_excitation;
-
-    input_excitation = torch::relu(fc2->forward(outer_excitation));
-    inner_excitation = input_excitation + prev_inner2 * decay_multiplier;
-    outer_excitation = torch::relu(inner_excitation - threshold);
-    // binarization of the activation
-    do_penalize_gate = (outer_excitation > 0).to(torch::kLong);
-    inner_excitation = inner_excitation - do_penalize_gate * (penalty_threshold/threshold * inner_excitation);
-    prev_inner2 = inner_excitation;
-
-    x = fc3->forward(inner_excitation);
+    x = torch::matmul(x, B);
+    x = torch::relu(fc1->forward(x));
+    x = torch::relu(fc2->forward(x));
+    x = fc3->forward(x);
+    x = torch::nn::functional::softmax(x, torch::nn::functional::SoftmaxFuncOptions(1));
     return x;
-
   }
-  // torch::Tensor forward(torch::Tensor x) {
-
-  //   x = torch::matmul(x, B);
-  //   x = torch::relu(fc1->forward(x));
-
-
-
-
-  //   x = torch::relu(fc2->forward(x));
-  //   x = fc3->forward(x);
-  //   x = torch::nn::functional::softmax(x, torch::nn::functional::SoftmaxFuncOptions(1));
-  //   return x;
-  // }
 
   torch::Tensor get_tensor_nn(uint64_t PC, uint64_t memory_addr, vector<uint64_t> pc_history) {
     
@@ -129,10 +97,7 @@ struct Net : torch::nn::Module {
         };
     }
     
-    // cout << pc_all_hash_f << endl;
-    // cout << pc_all_hash << endl;
     vector<float> pc_all_hash_f_new;
-    // cout << pc_all_hash_f.size() << endl;
     for (int i=0; i<pc_all_hash_f.size(); i++){
         float inset;
         
@@ -197,10 +162,9 @@ struct Net : torch::nn::Module {
 
 
   torch::nn::Linear fc1{nullptr}, fc2{nullptr}, fc3{nullptr};
-  torch::Tensor B, prev_inner1, prev_inner2;
-  float decay_multiplier;
-  float threshold;
-  float penalty_threshold;
+  torch::Tensor B;
+  
+
 
 };
 

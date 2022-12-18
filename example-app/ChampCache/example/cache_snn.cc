@@ -1,13 +1,11 @@
-/*  Hawkeye with Belady's Algorithm Replacement Policy
-    Code for Hawkeye configurations of 1 and 2 in Champsim */
+/* Cache Replacement using Spike Neural Networks */
 
 #include "../inc/champsim_crc2.h"
 #include <map>
 #include <math.h>
 
-#include "hawkeye_predictor.h"
 #include "optgen.h"
-#include "helper_function.h"
+#include "helper_function_nn.h"
 #include "snn.h"
 
 #define NUM_CORE 1
@@ -23,12 +21,12 @@ uint32_t rrip[LLC_SETS][LLC_WAYS];
 Net predictor_demand_o;    //2K entries, 5-bit counter per each entry
 Net* predictor_demand = &predictor_demand_o;
 torch::optim::Adam predictor_demand_optim(
-        predictor_demand->parameters(), torch::optim::AdamOptions(2e-4).betas({0.9, 0.5}));
+        predictor_demand->parameters(), torch::optim::AdamOptions(1e-1).betas({0.9, 0.5}));
 
 Net predictor_prefetch_o;  //2K entries, 5-bit counter per each entry
 Net* predictor_prefetch = &predictor_prefetch_o;
 torch::optim::Adam predictor_prefetch_optim(
-        predictor_prefetch->parameters(), torch::optim::AdamOptions(2e-4).betas({0.9, 0.5}));
+        predictor_prefetch->parameters(), torch::optim::AdamOptions(1e-1).betas({0.9, 0.5}));
 
 
 OPTgen optgen_occup_vector[LLC_SETS];   //64 vecotrs, 128 entries each

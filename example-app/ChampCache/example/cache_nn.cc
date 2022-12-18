@@ -1,25 +1,39 @@
-/*  Hawkeye with Belady's Algorithm Replacement Policy
-    Code for Hawkeye configurations of 1 and 2 in Champsim */
+/*  Cache Replacement using Spike Neural Networks */
 
 #include "../inc/champsim_crc2.h"
 #include <map>
 #include <math.h>
+/* Cache Replacement using Neural Networks with libtorch
+
+https://pytorch.org/cppdocs/frontend.html
+
+
+*/
+
+#include "optgen.h"
+#include "helper_function_nn.h"
+#include "nn.h"
 
 #define NUM_CORE 1
 #define LLC_SETS NUM_CORE*2048
 #define LLC_WAYS 16
-
+int num_buckets = 8;
 //3-bit RRIP counter
 #define MAXRRIP 7
 uint32_t rrip[LLC_SETS][LLC_WAYS];
 
-#include "hawkeye_predictor.h"
-#include "optgen.h"
-#include "helper_function_hawk.h"
 
-//Hawkeye predictors for demand and prefetch requests
-Hawkeye_Predictor* predictor_demand;    //2K entries, 5-bit counter per each entry
-Hawkeye_Predictor* predictor_prefetch;  //2K entries, 5-bit counter per each entry
+// Network
+Net predictor_demand_o;    //2K entries, 5-bit counter per each entry
+Net* predictor_demand = &predictor_demand_o;
+torch::optim::Adam predictor_demand_optim(
+        predictor_demand->parameters(), torch::optim::AdamOptions(1e-1).betas({0.9, 0.5}));
+
+Net predictor_prefetch_o;  //2K entries, 5-bit counter per each entry
+Net* predictor_prefetch = &predictor_prefetch_o;
+torch::optim::Adam predictor_prefetch_optim(
+        predictor_prefetch->parameters(), torch::optim::AdamOptions(1e-1).betas({0.9, 0.5}));
+
 
 OPTgen optgen_occup_vector[LLC_SETS];   //64 vecotrs, 128 entries each
 
@@ -32,9 +46,13 @@ bool prefetching[LLC_SETS][LLC_WAYS];
 #define SAMPLER_SETS SAMPLER_ENTRIES/SAMPLER_HIST
 vector<map<uint64_t, HISTORY>> cache_history_sampler;  //2800 entries, 4-bytes per each entry
 uint64_t sample_signature[LLC_SETS][LLC_WAYS];
+uint64_t sample_signature_paddr[LLC_SETS][LLC_WAYS];
+
 
 //History time
 #define TIMER_SIZE 1024
+unsigned int ACTUAL_HISTORY_LENGTH = 5;
+#define NUM_OTHER_FEATS 3
 uint64_t set_timer[LLC_SETS];   //64 sets, where 1 timer is used for every set
 
 //Mathmatical functions needed for sampling set
@@ -42,16 +60,23 @@ uint64_t set_timer[LLC_SETS];   //64 sets, where 1 timer is used for every set
 #define bits(x, i, l) (((x) >> (i)) & bitmask(l))
 #define SAMPLED_SET(set) (bits(set, 0 , 6) == bits(set, ((unsigned long long)log2(LLC_SETS) - 6), 6) )  //Helper function to sample 64 sets for each core
 
+// prepare history data 
+// feature vectors
+vector<uint64_t> actual_histories[NUM_CORE];
+
+
+
 
 // Initialize replacement state
 void InitReplacementState()
 {
     cout << "Initialize Hawkeye replacement policy state" << endl;
-
+    // cout << print_torch() << end;
     for (int i=0; i<LLC_SETS; i++) {
         for (int j=0; j<LLC_WAYS; j++) {
             rrip[i][j] = MAXRRIP;
             sample_signature[i][j] = 0;
+            sample_signature_paddr[i][j] = 0;
             prefetching[i][j] = false;
         }
         set_timer[i] = 0;
@@ -63,16 +88,22 @@ void InitReplacementState()
         cache_history_sampler[i].clear();
     }
 
-    predictor_prefetch = new Hawkeye_Predictor();
-    predictor_demand = new Hawkeye_Predictor();
+    ACTUAL_HISTORY_LENGTH += NUM_OTHER_FEATS;
+    for (int i=0; i < NUM_CORE; i++) {
+        actual_histories[i].clear();
+        actual_histories[i].reserve(ACTUAL_HISTORY_LENGTH);
+    }
 
-    cout << "Finished initializing Hawkeye replacement policy state" << endl;
+    cout << "Finished initializing NN Net replacement policy state" << endl;
+    // cout << print_torch() << end;
 }
 
 // Find replacement victim
 // Return value should be 0 ~ 15 or 16 (bypass)
 uint32_t GetVictimInSet (uint32_t cpu, uint32_t set, const BLOCK *current_set, uint64_t PC, uint64_t paddr, uint32_t type)
 {
+
+    // print_my_torch();
     //Find the line with RRPV of 7 in that set
     for(uint32_t i = 0; i < LLC_WAYS; i++){
         if(rrip[set][i] == MAXRRIP){
@@ -93,11 +124,21 @@ uint32_t GetVictimInSet (uint32_t cpu, uint32_t set, const BLOCK *current_set, u
     //Asserting that LRU victim is not -1
     //Predictor will be trained negaively on evictions
     if(SAMPLED_SET(set)){
+        uint64_t vic_paddr = sample_signature_paddr[set][victim];
+
+        uint64_t sample_tag = CRC(vic_paddr >> 12) % 256; // 4 bytes in each row
+        uint32_t sample_set = (vic_paddr >> 6) % SAMPLER_SETS;
+
+        
         if(prefetching[set][victim]){
-            predictor_prefetch->decrease(sample_signature[set][victim]);
+            predictor_prefetch_optim.zero_grad();
+            predictor_prefetch->decrease(sample_signature[set][victim], vic_paddr, cache_history_sampler[sample_set][sample_tag].context);
+            predictor_prefetch_optim.step();
         }
         else{
-            predictor_demand->decrease(sample_signature[set][victim]);
+            predictor_demand_optim.zero_grad();
+            predictor_demand->decrease(sample_signature[set][victim], vic_paddr, cache_history_sampler[sample_set][sample_tag].context);
+            predictor_demand_optim.step();
         }
     }
 
@@ -133,12 +174,26 @@ void UpdateReplacementState (uint32_t cpu, uint32_t set, uint32_t way, uint64_t 
         prefetching[set][way] = false;
     }
 
+    // from glider
+    int cache_friendly_lines = 0;
+    for (uint32_t i=0; i<LLC_WAYS; i++){
+        if (rrip[set][i] != MAXRRIP)
+            cache_friendly_lines++;
+    }
+    if(cache_friendly_lines == LLC_WAYS)
+        actual_histories[cpu][0] = num_buckets-1;
+    else
+        actual_histories[cpu][0] = cache_friendly_lines / (LLC_WAYS/num_buckets);
+
+    actual_histories[cpu][1] = num_buckets+hit;  
+    // from glider
+    
     //Only if we are using sampling sets for OPTgen
     if(SAMPLED_SET(set)){
         uint64_t currentVal = set_timer[set] % OPTGEN_SIZE;
-        uint64_t sample_tag = CRC(paddr >> 12) % 256;
+        uint64_t sample_tag = CRC(paddr >> 12) % 256; // 4 bytes in each row
         uint32_t sample_set = (paddr >> 6) % SAMPLER_SETS;
-
+       
         //If line has been used before, ignoring prefetching (demand access operation)
         if((type != PREFETCH) && (cache_history_sampler[sample_set].find(sample_tag) != cache_history_sampler[sample_set].end())){
             unsigned int current_time = set_timer[set];
@@ -150,20 +205,34 @@ void UpdateReplacementState (uint32_t cpu, uint32_t set, uint32_t way, uint64_t 
 
             //Train predictor positvely for last PC value that was prefetched
             if(!isWrap && optgen_occup_vector[set].is_cache(currentVal, previousVal)){
+                
                 if(cache_history_sampler[sample_set][sample_tag].prefetching){
-                    predictor_prefetch->increase(cache_history_sampler[sample_set][sample_tag].PCval);
+                    // TODO: add to the predictor_prefetch memory bank 
+                    predictor_prefetch_optim.zero_grad();
+                    predictor_prefetch->increase(cache_history_sampler[sample_set][sample_tag].PCval, paddr, cache_history_sampler[sample_set][sample_tag].context);
+                    predictor_prefetch_optim.step();
                 }
                 else{
-                    predictor_demand->increase(cache_history_sampler[sample_set][sample_tag].PCval);
+                    // TODO: add to the demand memory bank 
+                    predictor_demand_optim.zero_grad();
+                    predictor_demand->increase(cache_history_sampler[sample_set][sample_tag].PCval, paddr, cache_history_sampler[sample_set][sample_tag].context);
+                    predictor_demand_optim.step();
                 }
             }
             //Train predictor negatively since OPT did not cache this line
             else{
+                
                 if(cache_history_sampler[sample_set][sample_tag].prefetching){
-                    predictor_prefetch->decrease(cache_history_sampler[sample_set][sample_tag].PCval);
+                    // TODO: add to memory bank with False label
+                    predictor_prefetch_optim.zero_grad();
+                    predictor_prefetch->decrease(cache_history_sampler[sample_set][sample_tag].PCval, paddr, cache_history_sampler[sample_set][sample_tag].context);
+                    predictor_prefetch_optim.step();
                 }
                 else{
-                    predictor_demand->decrease(cache_history_sampler[sample_set][sample_tag].PCval);
+                    predictor_demand_optim.zero_grad();
+                    // TODO: add to memory bank with False label
+                    predictor_demand->decrease(cache_history_sampler[sample_set][sample_tag].PCval, paddr, cache_history_sampler[sample_set][sample_tag].context);
+                    predictor_demand_optim.step();
                 }
             }
             
@@ -209,10 +278,16 @@ void UpdateReplacementState (uint32_t cpu, uint32_t set, uint32_t way, uint64_t 
             if(set_timer[set] - cache_history_sampler[sample_set][sample_tag].previousVal < 5*NUM_CORE){
                 if(optgen_occup_vector[set].is_cache(currentVal, previousVal)){
                     if(cache_history_sampler[sample_set][sample_tag].prefetching){
-                        predictor_prefetch->increase(cache_history_sampler[sample_set][sample_tag].PCval);
+                        // TODO: add to memory bank
+                        predictor_prefetch_optim.zero_grad();
+                        predictor_prefetch->increase(cache_history_sampler[sample_set][sample_tag].PCval, paddr, cache_history_sampler[sample_set][sample_tag].context);
+                        predictor_prefetch_optim.step();
                     }
                     else{
-                        predictor_demand->increase(cache_history_sampler[sample_set][sample_tag].PCval);
+                        // TODO: add to memory bank
+                        predictor_demand_optim.zero_grad();
+                        predictor_demand->increase(cache_history_sampler[sample_set][sample_tag].PCval, paddr, cache_history_sampler[sample_set][sample_tag].context);
+                        predictor_demand_optim.step();
                     }
                 }
             }
@@ -223,18 +298,24 @@ void UpdateReplacementState (uint32_t cpu, uint32_t set, uint32_t way, uint64_t 
 
         }   
         //Update the sample with time and PC
-        cache_history_sampler[sample_set][sample_tag].update(set_timer[set], PC);
+        cache_history_sampler[sample_set][sample_tag].update(set_timer[set], PC, actual_histories[cpu]);
         cache_history_sampler[sample_set][sample_tag].lru = 0;
         set_timer[set] = (set_timer[set] + 1) % TIMER_SIZE;
     }
 
+    // TRAIN NN using memory
+
     //Retrieve Hawkeye's prediction for line
-    bool prediction = predictor_demand->get_prediction(PC);
+    // Inference with nn
+    bool prediction = predictor_demand->get_prediction(PC, paddr, actual_histories[cpu]);
+ 
     if(type == PREFETCH){
-        prediction = predictor_prefetch->get_prediction(PC);
+        bool prediction = predictor_prefetch->get_prediction(PC, paddr, actual_histories[cpu]);
     }
+    actual_histories[cpu][2] = num_buckets+2 + hit;
     
     sample_signature[set][way] = PC;
+    sample_signature_paddr[set][way] = paddr;
     //Fix RRIP counters with correct RRPVs and age accordingly
     if(!prediction){
         rrip[set][way] = MAXRRIP;
@@ -260,11 +341,26 @@ void UpdateReplacementState (uint32_t cpu, uint32_t set, uint32_t way, uint64_t 
         rrip[set][way] = 0;
     }
 
+    // update pc history features
+    assert(actual_histories[cpu].size() <= ACTUAL_HISTORY_LENGTH);
+    auto iter = find(actual_histories[cpu].begin()+NUM_OTHER_FEATS, actual_histories[cpu].end(), PC);
+    // if in, erase it
+    if(iter != actual_histories[cpu].end())
+        actual_histories[cpu].erase(iter);
+    // push it to the end
+    actual_histories[cpu].push_back(PC);
+    // if exceed the length, erase the front
+    if(actual_histories[cpu].size() > ACTUAL_HISTORY_LENGTH)
+        actual_histories[cpu].erase(actual_histories[cpu].begin()+NUM_OTHER_FEATS);
+
+    // std::cout << "actual_histories" << std::endl;
+    // std::cout << actual_histories[cpu] << std::endl;
+
 }
 
 // Use this function to print out your own stats on every heartbeat 
 void PrintStats_Heartbeat()
-{
+{  
     int hits = 0;
     int access = 0;
     for(int i = 0; i < LLC_SETS; i++){
@@ -275,6 +371,8 @@ void PrintStats_Heartbeat()
     cout<< "OPTGen Hits: " << hits << endl;
     cout<< "OPTGen Access: " << access << endl;
     cout<< "OPTGEN Hit Rate: " << 100 * ( (double)hits/(double)access )<< endl;
+    // print_my_pool();
+    // print_my_torch();
 }
 
 // Use this function to print out your own stats at the end of simulation
@@ -290,5 +388,6 @@ void PrintStats()
     cout<< "Final OPTGen Hits: " << hits << endl;
     cout<< "Final OPTGen Access: " << access << endl;
     cout<< "Final OPTGEN Hit Rate: " << 100 * ( (double)hits/(double)access )<< endl;
+    // cout << print_torch() << end;
 
 }

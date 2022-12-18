@@ -20,3 +20,4 @@ if (MSVC)
                      ${TORCH_DLLS}
                      $<TARGET_FILE_DIR:example-app>)
 endif (MSVC)
+

@@ -1,0 +1,33 @@
+In file included from /home/tianqinl/SNN-Cpp/example-app/ChampCache/example/cache_snn.cc:9:0:
+/home/tianqinl/SNN-Cpp/example-app/ChampCache/example/snn.h: In member function 'at::Tensor Net::get_tensor_nn(uint64_t, uint64_t, std::vector<long unsigned int>)':
+/home/tianqinl/SNN-Cpp/example-app/ChampCache/example/snn.h:150:70: warning: narrowing conversion of 'pc_all_hash_f_new.std::vector<_Tp, _Alloc>::size<float, std::allocator<float> >()' from 'uint64_t {aka long unsigned int}' to 'long int' inside { } [-Wnarrowing]
+     torch::Tensor out = torch::from_blob(pc_all_hash_f_new.data(), { static_cast<uint64_t>(pc_all_hash_f_new.size()) }).view({1, -1});
+                                                                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+/home/tianqinl/SNN-Cpp/example-app/ChampCache/example/snn.h:150:70: warning: narrowing conversion of 'pc_all_hash_f_new.std::vector<_Tp, _Alloc>::size<float, std::allocator<float> >()' from 'uint64_t {aka long unsigned int}' to 'long int' inside { } [-Wnarrowing]
+terminate called after throwing an instance of 'c10::Error'
+  what():  Trying to backward through the graph a second time (or directly access saved tensors after they have already been freed). Saved intermediate values of the graph are freed when you call .backward() or autograd.grad(). Specify retain_graph=True if you need to backward through the graph a second time or if you need to access saved tensors after calling backward.
+Exception raised from unpack at ../torch/csrc/autograd/saved_variable.cpp:136 (most recent call first):
+frame #0: c10::Error::Error(c10::SourceLocation, std::string) + 0x57 (0x7f2ecd0820a7 in /home/tianqinl/SNN-Cpp/example-app/libtorch/lib/libc10.so)
+frame #1: c10::detail::torchCheckFail(char const*, char const*, unsigned int, char const*) + 0x68 (0x7f2ecd04edd2 in /home/tianqinl/SNN-Cpp/example-app/libtorch/lib/libc10.so)
+frame #2: torch::autograd::SavedVariable::unpack(std::shared_ptr<torch::autograd::Node>) const + 0x13e2 (0x7f2eb6daa6b2 in /home/tianqinl/SNN-Cpp/example-app/libtorch/lib/libtorch_cpu.so)
+frame #3: torch::autograd::generated::MulBackward0::apply(std::vector<at::Tensor, std::allocator<at::Tensor> >&&) + 0xb5 (0x7f2eb622ef15 in /home/tianqinl/SNN-Cpp/example-app/libtorch/lib/libtorch_cpu.so)
+frame #4: <unknown function> + 0x48cd1fb (0x7f2eb6d7a1fb in /home/tianqinl/SNN-Cpp/example-app/libtorch/lib/libtorch_cpu.so)
+frame #5: torch::autograd::Engine::evaluate_function(std::shared_ptr<torch::autograd::GraphTask>&, torch::autograd::Node*, torch::autograd::InputBuffer&, std::shared_ptr<torch::autograd::ReadyQueue> const&) + 0xd90 (0x7f2eb6d72ae0 in /home/tianqinl/SNN-Cpp/example-app/libtorch/lib/libtorch_cpu.so)
+frame #6: torch::autograd::Engine::thread_main(std::shared_ptr<torch::autograd::GraphTask> const&) + 0x698 (0x7f2eb6d73d28 in /home/tianqinl/SNN-Cpp/example-app/libtorch/lib/libtorch_cpu.so)
+frame #7: torch::autograd::Engine::execute_with_graph_task(std::shared_ptr<torch::autograd::GraphTask> const&, std::shared_ptr<torch::autograd::Node>, torch::autograd::InputBuffer&&) + 0x3cb (0x7f2eb6d6ec4b in /home/tianqinl/SNN-Cpp/example-app/libtorch/lib/libtorch_cpu.so)
+frame #8: torch::autograd::Engine::execute(std::vector<torch::autograd::Edge, std::allocator<torch::autograd::Edge> > const&, std::vector<at::Tensor, std::allocator<at::Tensor> > const&, bool, bool, bool, std::vector<torch::autograd::Edge, std::allocator<torch::autograd::Edge> > const&) + 0x509 (0x7f2eb6d71309 in /home/tianqinl/SNN-Cpp/example-app/libtorch/lib/libtorch_cpu.so)
+frame #9: <unknown function> + 0x48a9fd1 (0x7f2eb6d56fd1 in /home/tianqinl/SNN-Cpp/example-app/libtorch/lib/libtorch_cpu.so)
+frame #10: torch::autograd::backward(std::vector<at::Tensor, std::allocator<at::Tensor> > const&, std::vector<at::Tensor, std::allocator<at::Tensor> > const&, c10::optional<bool>, bool, std::vector<at::Tensor, std::allocator<at::Tensor> > const&) + 0x5c (0x7f2eb6d58dac in /home/tianqinl/SNN-Cpp/example-app/libtorch/lib/libtorch_cpu.so)
+frame #11: <unknown function> + 0x490069e (0x7f2eb6dad69e in /home/tianqinl/SNN-Cpp/example-app/libtorch/lib/libtorch_cpu.so)
+frame #12: at::Tensor::_backward(c10::ArrayRef<at::Tensor>, c10::optional<at::Tensor> const&, c10::optional<bool>, bool) const + 0x48 (0x7f2eb3fe8358 in /home/tianqinl/SNN-Cpp/example-app/libtorch/lib/libtorch_cpu.so)
+frame #13: at::Tensor::backward(at::Tensor const&, c10::optional<bool>, bool, c10::optional<c10::ArrayRef<at::Tensor> >) const + 0x11d (0x4589cb in ./build/example-app)
+frame #14: Net::train_templete(unsigned long, unsigned long, std::vector<unsigned long, std::allocator<unsigned long> >, bool) + 0x361 (0x461b37 in ./build/example-app)
+frame #15: Net::increase(unsigned long, unsigned long, std::vector<unsigned long, std::allocator<unsigned long> >) + 0x5a (0x461d02 in ./build/example-app)
+frame #16: UpdateReplacementState(unsigned int, unsigned int, unsigned int, unsigned long, unsigned long, unsigned long, unsigned int, unsigned char) + 0x4cb (0x4523f5 in ./build/example-app)
+frame #17: CACHE::handle_read() + 0x357 (0x498b07 in ./build/example-app)
+frame #18: CACHE::operate() + 0x19 (0x4993f9 in ./build/example-app)
+frame #19: main + 0x7cd (0x45030d in ./build/example-app)
+frame #20: __libc_start_main + 0xf5 (0x7f2eb164c3d5 in /lib64/libc.so.6)
+frame #21: ./build/example-app() [0x450eb7]
+
+build_binary.sh: line 11: 32518 Aborted                 ./build/example-app -warmup_instructions 1000000 -simulation_instructions 10000000 -traces ChampCache/trace/bzip2_10M.trace.gz
