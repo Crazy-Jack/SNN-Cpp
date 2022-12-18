@@ -5,7 +5,7 @@ find_package(Torch REQUIRED)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
 
 add_executable(snn-cpp ${PROJECT_SOURCE_DIR}/ChampCache/example/cache_nn.cc)
-target_link_libraries(snn-cpp "${TORCH_LIBRARIES}" ${PROJECT_SOURCE_DIR}/ChampCache/lib/config2.a)
+target_link_libraries(snn-cpp "${TORCH_LIBRARIES}" ${PROJECT_SOURCE_DIR}/ChampCache/lib/config1.a)
 set_property(TARGET snn-cpp PROPERTY CXX_STANDARD 14)
 set_property(TARGET snn-cpp PROPERTY PROPERTY CXX_STANDARD_REQUIRED ON)
 

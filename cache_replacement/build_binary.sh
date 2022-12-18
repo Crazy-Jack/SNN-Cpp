@@ -4,7 +4,7 @@ export CXX=`which g++`
 rm -rf build
 mkdir build
 cd build 
-cmake -DCMAKE_PREFIX_PATH=/home/tianqinl/SNN-Cpp/src/libtorch ..
+cmake -DCMAKE_PREFIX_PATH=/home/tianqinl/SNN-Cpp/cache_replacement/libtorch ..
 cmake --build . --config Release
 cd ..
 
