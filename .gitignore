@@ -3,4 +3,4 @@ libtorch/
 trace/
 .vscode/
 build/
-.log/
+*.log/
