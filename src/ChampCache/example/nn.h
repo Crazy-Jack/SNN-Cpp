@@ -38,11 +38,10 @@ constexpr double normalize (T value) {
 struct Net : torch::nn::Module {
   Net() {
     fc1 = register_module("fc1", torch::nn::Linear(256, 256));
-    fc2 = register_module("fc2", torch::nn::Linear(256, 256));
+    fc2 = register_module("fc2", torch::nn::Linear(256, 32));
     fc3 = register_module("fc3", torch::nn::Linear(32, 2));
     torch::manual_seed(0);
     B = torch::rand({40, 256}) * 10; 
-    error = float 0;
    
   }
 //   // noise for sensitive signals 
